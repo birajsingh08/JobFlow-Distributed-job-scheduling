@@ -1,0 +1,38 @@
+import { io, Socket } from 'socket.io-client';
+
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000';
+
+let socket: Socket | null = null;
+
+export function getSocket(): Socket {
+  if (!socket) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    socket = io(WS_URL, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
+    });
+  }
+  return socket;
+}
+
+export function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+}
+
+export function subscribeToProject(projectId: string) {
+  getSocket().emit('subscribe:project', projectId);
+}
+
+export function unsubscribeFromProject(projectId: string) {
+  getSocket().emit('unsubscribe:project', projectId);
+}
+
+export function subscribeToQueue(queueId: string) {
+  getSocket().emit('subscribe:queue', queueId);
+}

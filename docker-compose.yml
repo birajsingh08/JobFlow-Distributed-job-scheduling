@@ -1,0 +1,81 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobscheduler_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobscheduler
+      POSTGRES_PASSWORD: jobscheduler_secret
+      POSTGRES_DB: jobscheduler
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jobscheduler']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jobscheduler_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: jobscheduler_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis_secret
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_secret', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jobscheduler_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jobscheduler_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.docker
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - jobscheduler_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobscheduler_frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3000
+      - NEXT_PUBLIC_WS_URL=http://backend:3000
+    ports:
+      - '3001:3001'
+    depends_on:
+      - backend
+    networks:
+      - jobscheduler_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  jobscheduler_net:
+    driver: bridge
